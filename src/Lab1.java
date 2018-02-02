@@ -44,7 +44,7 @@ public class Lab1 {
 
         TSimInterface tsi = TSimInterface.getInstance();
 
-
+        // Putting all the things in maps
         semaphores.put(SemaphoreName.CROSSING, new Semaphore(1));
         semaphores.put(SemaphoreName.NORTH, new Semaphore(0));
         semaphores.put(SemaphoreName.SOUTH, new Semaphore(0));
@@ -90,9 +90,10 @@ public class Lab1 {
             sensorsInversed.put(entry.getValue(), entry.getKey());
         }
 
-
         Train train1 = null;
         Train train2 = null;
+
+        //Initializing the trains
         try {
             train1 = new Train(1, speed1, tsi, SensorName.NORTH_STATION_NORTH);
             train2 = new Train(2, speed2, tsi, SensorName.SOUTH_STATION_NORTH);
@@ -101,6 +102,7 @@ public class Lab1 {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+        //Starting trains
         train1.start();
         train2.start();
 
@@ -137,12 +139,24 @@ public class Lab1 {
             }
         }
 
+        /**
+         * Sets a given switch to a given direction.
+         * @param switchName The name of the switch to be set.
+         * @param direction The direction from TSimInterface.
+         * @throws CommandException
+         */
         private void setSwitch(SwitchName switchName, int direction) throws CommandException {
 
             List<Integer> switchPos = switches.get(switchName);
             tsi.setSwitch(switchPos.get(0), switchPos.get(1), direction);
         }
 
+        /**
+         * Sets the trains speed to 0 until the semaphore gives it a passs.
+         * @param semaphoreName
+         * @throws CommandException
+         * @throws InterruptedException
+         */
         private void waitForPass(SemaphoreName semaphoreName) throws CommandException, InterruptedException {
             Semaphore semaphore = semaphores.get(semaphoreName);
             tsi.setSpeed(id, 0);
@@ -150,6 +164,14 @@ public class Lab1 {
             tsi.setSpeed(id, this.direction * speed);
         }
 
+        /**
+         * Same as waitForPass(SemaphoreName semaphoreName) but it also sets a switch to the method's given value after the permit is acquired.
+         * @param semaphoreName
+         * @param switchName
+         * @param direction
+         * @throws CommandException
+         * @throws InterruptedException
+         */
         private void waitForPass(SemaphoreName semaphoreName, SwitchName switchName, int direction) throws CommandException, InterruptedException {
             Semaphore semaphore = semaphores.get(semaphoreName);
             tsi.setSpeed(id, 0);
@@ -159,6 +181,10 @@ public class Lab1 {
 
         }
 
+        /**
+         * Releases a permit from a semaphore.
+         * @param semaphoreName
+         */
         private void releasePass(SemaphoreName semaphoreName) {
             Semaphore semaphore = semaphores.get(semaphoreName);
             if (semaphore.availablePermits() == 0) {
@@ -169,7 +195,6 @@ public class Lab1 {
         private boolean semaphoreHasAvailablePermits(SemaphoreName semaphoreName) {
             return 0 != semaphores.get(semaphoreName).availablePermits();
         }
-
 
         private void handleSensorEvent(SensorEvent sensorEvent) throws CommandException, InterruptedException {
             boolean active = sensorEvent.getStatus() == SensorEvent.ACTIVE;
@@ -345,7 +370,7 @@ public class Lab1 {
 
                 }
 
-
+                //Store which sensor was just handled.
                 lastSensor = sensorName;
 
             }
@@ -356,6 +381,9 @@ public class Lab1 {
             direction *= -1;
         }
 
+        /**
+         * Stops the train, sleeps the thread, changes the trains direction and let's it take off again.
+         */
         public void waitAtStation() {
             try {
                 tsi.setSpeed(id, 0);
@@ -368,7 +396,7 @@ public class Lab1 {
                 e.printStackTrace();
             }
         }
-        
+
 
         public void run() {
             while (!this.isInterrupted()) {
