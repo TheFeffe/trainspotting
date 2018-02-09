@@ -1,6 +1,5 @@
 import TSim.*;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,8 +8,9 @@ import java.util.concurrent.Semaphore;
 import static java.util.Arrays.asList;
 import static java.util.Arrays.fill;
 
-import java.util.stream.Collectors;
 
+// Kolla metoden tryAcquire i Semaphore
+// Se till att semaphoren endast släpps om man är säker på att man hade den.
 
 public class Lab1 {
 
@@ -95,8 +95,8 @@ public class Lab1 {
 
         //Initializing the trains
         try {
-            train1 = new Train(1, speed1, tsi, SensorName.NORTH_STATION_NORTH);
-            train2 = new Train(2, speed2, tsi, SensorName.SOUTH_STATION_NORTH);
+            train1 = new Train(1, speed1, tsi, SensorName.NORTH_STATION_NORTH, SemaphoreName.NORTH);
+            train2 = new Train(2, speed2, tsi, SensorName.SOUTH_STATION_NORTH, SemaphoreName.SOUTH);
         } catch (CommandException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
@@ -119,25 +119,35 @@ public class Lab1 {
         Integer direction = 1;
         TSimInterface tsi;
         SensorName lastSensor;
+        Integer maxSpeed = 25;
+        SemaphoreName lastSemaphore;
+        SemaphoreName currentSemaphore;
 
-        int maxSpeed = 28;
 
-        Train(Integer id, Integer startSpeed, TSimInterface tsi, SensorName startSensor) throws CommandException, InterruptedException {
+
+        Train(Integer id, Integer startSpeed, TSimInterface tsi, SensorName startSensor, SemaphoreName startSemaphore) throws CommandException, InterruptedException {
             this.id = id;
-            if (startSpeed <= maxSpeed)
-                this.speed = startSpeed;
-            else
-                this.speed = maxSpeed;
+
+            this.speed=maxSpeedCheck(startSpeed);
             this.tsi = tsi;
             this.lastSensor = startSensor;
+            this.lastSemaphore = startSemaphore;
+            this.currentSemaphore = lastSemaphore;
+        }
 
-
-            try {
-                tsi.setSpeed(id, direction * speed);
-            } catch (CommandException e) {
-                e.printStackTrace();
+        Integer maxSpeedCheck(Integer speed){
+            if (speed<=maxSpeed){
+                return speed;
+            }
+            else{
+                return maxSpeed;
             }
         }
+
+        private void goForward() throws CommandException {
+            tsi.setSpeed(id, speed*direction);
+        }
+
 
         /**
          * Sets a given switch to a given direction.
@@ -161,6 +171,7 @@ public class Lab1 {
             Semaphore semaphore = semaphores.get(semaphoreName);
             tsi.setSpeed(id, 0);
             semaphore.acquire();
+            updateSemaphores(semaphoreName);
             tsi.setSpeed(id, this.direction * speed);
         }
 
@@ -176,6 +187,7 @@ public class Lab1 {
             Semaphore semaphore = semaphores.get(semaphoreName);
             tsi.setSpeed(id, 0);
             semaphore.acquire();
+            updateSemaphores(semaphoreName);
             setSwitch(switchName, direction);
             tsi.setSpeed(id, this.direction * speed);
 
@@ -187,13 +199,24 @@ public class Lab1 {
          */
         private void releasePass(SemaphoreName semaphoreName) {
             Semaphore semaphore = semaphores.get(semaphoreName);
-            if (semaphore.availablePermits() == 0) {
+            if (semaphore.availablePermits() == 0 && (semaphoreName.equals(lastSemaphore) || semaphoreName.equals(SemaphoreName.CROSSING))) {
                 semaphore.release();
+                lastSemaphore = currentSemaphore;
             }
         }
 
+
         private boolean semaphoreHasAvailablePermits(SemaphoreName semaphoreName) {
-            return 0 != semaphores.get(semaphoreName).availablePermits();
+            boolean gotPermit = semaphores.get(semaphoreName).tryAcquire();
+            updateSemaphores(semaphoreName);
+            return gotPermit;
+        }
+
+        private void updateSemaphores(SemaphoreName semaphoreName){
+            if (semaphoreName!=SemaphoreName.CROSSING){
+                lastSemaphore = currentSemaphore;
+                currentSemaphore = semaphoreName;
+            }
         }
 
         private void handleSensorEvent(SensorEvent sensorEvent) throws CommandException, InterruptedException {
@@ -237,7 +260,8 @@ public class Lab1 {
                     case NORTH_JUNCTION_FROM_EAST:
                         if (lastSensor == SensorName.EAST_PITSTOP_FROM_EAST) {
                             if (semaphoreHasAvailablePermits(SemaphoreName.NORTH)) {
-                                waitForPass(SemaphoreName.NORTH, SwitchName.NORTH, TSimInterface.SWITCH_RIGHT);
+                                setSwitch(SwitchName.NORTH, TSimInterface.SWITCH_RIGHT);
+                                goForward();
                             } else {
                                 setSwitch(SwitchName.NORTH, TSimInterface.SWITCH_LEFT);
                             }
@@ -264,7 +288,7 @@ public class Lab1 {
                     case EAST_PITSTOP_FROM_EAST:
                         if (lastSensor == SensorName.NORTH_JUNCTION_FROM_EAST) {
                             if (semaphoreHasAvailablePermits(SemaphoreName.PITSTOP)) {
-                                waitForPass(SemaphoreName.PITSTOP, SwitchName.PITSTOP_EAST, TSimInterface.SWITCH_RIGHT);
+                                setSwitch(SwitchName.PITSTOP_EAST, TSimInterface.SWITCH_RIGHT);
                             } else {
                                 setSwitch(SwitchName.PITSTOP_EAST, TSimInterface.SWITCH_LEFT);
                             }
@@ -305,7 +329,8 @@ public class Lab1 {
                     case WEST_PITSTOP_FROM_WEST:
                         if (lastSensor == SensorName.SOUTH_JUNCTION_FROM_WEST) {
                             if (semaphoreHasAvailablePermits(SemaphoreName.PITSTOP)) {
-                                waitForPass(SemaphoreName.PITSTOP, SwitchName.PITSTOP_WEST, TSimInterface.SWITCH_LEFT);
+                                setSwitch(SwitchName.PITSTOP_WEST, TSimInterface.SWITCH_LEFT);
+                                goForward();
                             } else {
                                 setSwitch(SwitchName.PITSTOP_WEST, TSimInterface.SWITCH_RIGHT);
                             }
@@ -318,7 +343,8 @@ public class Lab1 {
                     case SOUTH_JUNCTION_FROM_WEST:
                         if (lastSensor == SensorName.WEST_PITSTOP_FROM_WEST) {
                             if (semaphoreHasAvailablePermits(SemaphoreName.SOUTH)) {
-                                waitForPass(SemaphoreName.SOUTH, SwitchName.SOUTH, TSimInterface.SWITCH_LEFT);
+                                setSwitch(SwitchName.SOUTH, TSimInterface.SWITCH_LEFT);
+                                goForward();
                             } else {
                                 setSwitch(SwitchName.SOUTH, TSimInterface.SWITCH_RIGHT);
                             }
@@ -354,7 +380,6 @@ public class Lab1 {
                         }
                         break;
 
-
                     //SOUTH STATION
                     case SOUTH_STATION_NORTH:
                         if (lastSensor == SensorName.SOUTH_JUNCTION_FROM_NORTH_EAST) {
@@ -384,7 +409,7 @@ public class Lab1 {
         /**
          * Stops the train, sleeps the thread, changes the trains direction and let's it take off again.
          */
-        public void waitAtStation() {
+        private void waitAtStation() {
             try {
                 tsi.setSpeed(id, 0);
                 sleep(1000 + (20 * speed));
@@ -399,6 +424,11 @@ public class Lab1 {
 
 
         public void run() {
+            try {
+                tsi.setSpeed(id, maxSpeedCheck(this.speed));
+            } catch (CommandException e) {
+                e.printStackTrace();
+            }
             while (!this.isInterrupted()) {
                 try {
                     handleSensorEvent(tsi.getSensor(this.id));
