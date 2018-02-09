@@ -6,11 +6,9 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 import static java.util.Arrays.asList;
-import static java.util.Arrays.fill;
 
 
-// Kolla metoden tryAcquire i Semaphore
-// Se till att semaphoren endast släpps om man är säker på att man hade den.
+
 
 public class Lab1 {
 
